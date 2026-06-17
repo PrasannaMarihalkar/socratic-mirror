@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+
+# Node
+node_modules/
+dist/
+build/
+
+# Environment — API keys, never upload these
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
