@@ -5,7 +5,7 @@ from app.services.depth_classifier import classify_next_depth
 from app.services.frustration_detector import compute_frustration_score
 from app.services import db
 
-# Groq client — free, fast, Llama 3.3 70B
+# Groq client — free, fast
 client = Groq(api_key=settings.groq_api_key)
 
 
@@ -19,10 +19,11 @@ def generate_probe(
     consecutive_short_responses: int,
     turn_number: int,
 ) -> dict:
-    # If student already answered the final L8 reflection question, end session
-    if current_depth == 8 and turn_number > 1:
-        last_ai_msg = conversation_history[-1]["content"] if conversation_history else ""
-        if "what did you understand" in last_ai_msg.lower() or "what did you learn" in last_ai_msg.lower():
+    # If student is already at L8 and has just answered the reflection question
+    # (i.e. the previous AI message was a reflection-depth question), end session
+    if current_depth == 8 and turn_number > 1 and conversation_history:
+        last_msg = conversation_history[-1]
+        if last_msg.get("role") == "assistant":
             db.save_turn(
                 session_id=session_id,
                 turn_number=turn_number,
@@ -47,21 +48,17 @@ def generate_probe(
     frustration_score = compute_frustration_score(
         student_message, consecutive_short_responses
     )
-
     # Step 2: Soften depth if student is frustrated
     effective_depth = max(1, current_depth - 1) if frustration_score > 0.7 else current_depth
-
     # Step 3: Build the system prompt for this depth level
     system_prompt = build_system_prompt(effective_depth, topic, language)
-
     # Step 4: Build message history
     messages = conversation_history + [
         {"role": "user", "content": student_message}
     ]
-
     # Step 5: Call Groq API (free!)
     response = client.chat.completions.create(
-        model="openai/gpt-oss-120b",  
+        model="openai/gpt-oss-120b",
         max_tokens=600,
         messages=[
             {"role": "system", "content": system_prompt},
@@ -69,10 +66,8 @@ def generate_probe(
         ],
     )
     probe_question = response.choices[0].message.content.strip()
-
     # Step 6: Classify next depth level
     next_depth = classify_next_depth(student_message, effective_depth, turn_number)
-
     # Step 7: Save to database
     db.save_turn(
         session_id=session_id,
@@ -83,10 +78,8 @@ def generate_probe(
         depth_label=DEPTH_LEVELS[effective_depth]["name"],
         frustration_score=frustration_score,
     )
-
     # Step 8: Update session metadata
     db.update_session(session_id, next_depth, turn_number)
-
     return {
         "probe": probe_question,
         "depth_used": effective_depth,
