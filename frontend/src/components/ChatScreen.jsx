@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { getProbe } from '../utils/api'
 import useSessionStore from '../store/sessionStore'
+import StatsSidebar from './StatsSidebar'
 
 const DEPTH_COLORS = {
   1: '#94a3b8', 2: '#60a5fa', 3: '#34d399',
@@ -108,6 +109,7 @@ function Message({ msg, index }) {
 export default function ChatScreen() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [sessionComplete, setSessionComplete] = useState(false)
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
 
@@ -126,7 +128,7 @@ export default function ChatScreen() {
   }, [messages, loading])
 
   const sendMessage = async () => {
-    if (!input.trim() || loading) return
+    if (!input.trim() || loading || sessionComplete) return
 
     const text = input.trim()
     setInput('')
@@ -144,9 +146,14 @@ export default function ChatScreen() {
         consecutive_short_responses: consecutiveShortResponses,
         turn_number: turnNumber,
       })
-
+      console.log("BACKEND RESPONSE:", result)
       addAIMessage(result.probe, result.depth_used, result.depth_label)
       updateDepth(result.next_depth)
+
+      // Lock the chat once the backend signals the session is done
+      if (result.session_complete) {
+        setSessionComplete(true)
+      }
     } catch (e) {
       addAIMessage(
         'Something went wrong. Make sure the backend server is running.',
@@ -163,6 +170,11 @@ export default function ChatScreen() {
       e.preventDefault()
       sendMessage()
     }
+  }
+
+  const handleReset = () => {
+    setSessionComplete(false)
+    reset()
   }
 
   return (
@@ -228,7 +240,7 @@ export default function ChatScreen() {
 
             {/* New session button */}
             <button
-              onClick={reset}
+              onClick={handleReset}
               className="text-slate-500 hover:text-white border border-border
                 hover:border-slate-600 px-3 py-1 rounded-lg text-xs
                 font-grotesk transition-all duration-200"
@@ -270,6 +282,21 @@ export default function ChatScreen() {
           {/* Typing indicator */}
           {loading && <TypingIndicator />}
 
+          {/* Session complete banner */}
+          {sessionComplete && (
+            <div className="flex justify-center mt-6 fade-in-up">
+              <div className="bg-primary/10 border border-primary/30 rounded-xl
+                px-5 py-3 text-center max-w-sm">
+                <p className="text-primary text-sm font-grotesk font-600">
+                  🎯 Thinking session complete
+                </p>
+                <p className="text-slate-500 text-xs font-mono mt-1">
+                  Start a new session to explore another topic
+                </p>
+              </div>
+            </div>
+          )}
+
           <div ref={bottomRef} />
         </div>
 
@@ -281,17 +308,23 @@ export default function ChatScreen() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Share your thinking... (Enter to send, Shift+Enter for new line)"
+              disabled={sessionComplete}
+              placeholder={
+                sessionComplete
+                  ? "Session complete — start a new one to continue"
+                  : "Share your thinking... (Enter to send, Shift+Enter for new line)"
+              }
               rows={2}
               className="flex-1 bg-surface border border-border rounded-xl
                 px-4 py-3 text-sm text-white placeholder-slate-600
                 font-grotesk resize-none focus:outline-none
                 focus:border-primary focus:ring-1 focus:ring-primary/50
-                transition-all duration-200 leading-relaxed"
+                transition-all duration-200 leading-relaxed
+                disabled:opacity-40 disabled:cursor-not-allowed"
             />
             <button
               onClick={sendMessage}
-              disabled={loading || !input.trim()}
+              disabled={loading || !input.trim() || sessionComplete}
               className="w-12 h-12 bg-primary hover:bg-glow disabled:opacity-30
                 disabled:cursor-not-allowed rounded-xl flex items-center
                 justify-center transition-all duration-200
@@ -305,10 +338,16 @@ export default function ChatScreen() {
             </button>
           </div>
           <p className="text-slate-700 text-xs font-mono mt-2 text-center">
-            Turn {turnNumber} · This AI will never answer — only ask
+            {sessionComplete
+              ? 'Session complete · Click "New Session" to start again'
+              : `Turn ${turnNumber} · This AI will never answer — only ask`}
           </p>
         </div>
       </div>
+
+      {/* ── RIGHT SIDEBAR: Stats ────────────────────────────────────── */}
+      <StatsSidebar />
+
     </div>
   )
 }

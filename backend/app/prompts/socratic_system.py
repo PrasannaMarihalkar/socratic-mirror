@@ -29,8 +29,8 @@ DEPTH_LEVELS = {
         "instruction": "Ask the student to connect this concept to something else they already know.",
     },
     8: {
-        "name": "Reflection",
-        "instruction": "Ask the student to articulate what changed in their understanding through this conversation.",
+    "name": "Reflection",
+    "instruction": "Ask the student exactly this kind of question once: what did they understand or learn from this conversation. This is the final question of the session.",
     },
 }
 

@@ -19,6 +19,29 @@ def generate_probe(
     consecutive_short_responses: int,
     turn_number: int,
 ) -> dict:
+    # If student already answered the final L8 reflection question, end session
+    if current_depth == 8 and turn_number > 1:
+        last_ai_msg = conversation_history[-1]["content"] if conversation_history else ""
+        if "what did you understand" in last_ai_msg.lower() or "what did you learn" in last_ai_msg.lower():
+            db.save_turn(
+                session_id=session_id,
+                turn_number=turn_number,
+                student_message=student_message,
+                probe_question="Thank you for reflecting. This thinking session is now complete. 🎯",
+                depth_level=8,
+                depth_label="Reflection",
+                frustration_score=0.0,
+            )
+            db.update_session(session_id, 8, turn_number)
+            return {
+                "probe": "Thank you for reflecting. This thinking session is now complete. 🎯",
+                "depth_used": 8,
+                "depth_label": "Reflection",
+                "next_depth": 8,
+                "frustration_score": 0.0,
+                "turn_number": turn_number,
+                "session_complete": True,
+            }
 
     # Step 1: Detect frustration
     frustration_score = compute_frustration_score(
@@ -38,14 +61,13 @@ def generate_probe(
 
     # Step 5: Call Groq API (free!)
     response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",  # Best free model on Groq
-        max_tokens=150,
+        model="openai/gpt-oss-120b",  
+        max_tokens=600,
         messages=[
             {"role": "system", "content": system_prompt},
             *messages
         ],
     )
-
     probe_question = response.choices[0].message.content.strip()
 
     # Step 6: Classify next depth level
